@@ -146,6 +146,9 @@ def main():
     checkpoint_dir = Path(args.checkpoint)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
+    # display nb of workers
+    print(f"number of train workers {cfg.TRAIN.WORKERS}")
+
     # create model
     print("=> creating model '{}'".format(cfg.MODEL.ARCH))
     model = get_model(model_name=cfg.MODEL.ARCH)
