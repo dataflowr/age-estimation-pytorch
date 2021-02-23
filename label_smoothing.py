@@ -16,28 +16,27 @@ class LabelSmoothingLoss(nn.Module):
         super(LabelSmoothingLoss, self).__init__()
         self.std = std_smoothing * n_classes
         self.x = np.arange(0, n_classes, 1)
-        # self.register_buffer('one_hot', one_hot.unsqueeze(0))
 
-    def forward(self, output, target):
+    def forward(self, output, target, debug=False):
         """
         output (FloatTensor): batch_size x n_classes
         target (LongTensor): batch_size
         """
-        # model_prob = np.array([])
-        # for age in target:
         model_prob = norm.pdf(self.x, target.unsqueeze(1), self.std)
-        
         model_prob = torch.from_numpy(model_prob)
-        print(model_prob.shape)
-
+        if debug: print(model_prob.shape)
+        
         return F.kl_div(output, model_prob, reduction='sum')
+
+# Problem : the smoothed labels do not sum to one --> does it involve a bias ? which one ?
+
 
 def main():
     output = torch.zeros(5,10)
     target = torch.Tensor([4,6,2,9,6])
 
     criterion = LabelSmoothingLoss(0.05, 10)
-    loss = criterion(output, target)
+    _ = criterion(output, target, True)
 
 if __name__ == '__main__':
     main()
