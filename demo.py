@@ -59,7 +59,7 @@ def yield_images():
             ret, img = cap.read()
 
             if not ret:
-                raise RuntimeError("Failed to capture image. stopped")
+                raise RuntimeError("Failed to capture image.")
 
             yield img, None
 
