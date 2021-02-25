@@ -13,8 +13,25 @@ def get_model(model_name="se_resnext50_32x4d", num_classes=101, pretrained="imag
     return model
 
 
-def get_classifier():
-    return # last layers a appliquer sur les precomputed features
+def get_classifier(n_features, n_classes=101):
+    hidden = int(n_features/10)
+    classif = nn.Sequential(
+        nn.Linear(n_features, hidden),
+        nn.ReLU(),
+        nn.Linear(hidden, n_classes)
+        # TODO: try a Softmax or normalization
+    )
+    return classif
+
+def get_regressor(n_features, n_classes):
+    reg = nn.Sequential(
+        nn.Linear(n_features, n_features/10),
+        nn.ReLU(),
+        nn.Linear(n_features/10, n_classes),
+        nn.ReLU(),
+        nn.Linear(n_classes,1)
+    )
+    return reg
 
 def main():
     model = get_model()

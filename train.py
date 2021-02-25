@@ -99,7 +99,7 @@ def validate(validate_loader, model, criterion, epoch, device):
 
     with torch.no_grad():
         with tqdm(validate_loader) as _tqdm:
-            for i, (x, y) in enumerate(_tqdm):
+            for _, (x, y) in enumerate(_tqdm):
                 x = x.to(device)
                 y = y.to(device)
 
