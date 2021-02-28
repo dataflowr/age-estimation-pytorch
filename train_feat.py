@@ -54,9 +54,14 @@ def main():
     n_classes = 101
     
     # create model
-    print("=> creating classifier")
-    model = get_classifier(n_features=n_features, n_classes=n_classes)
+    if cfg.MODEL.ARCH_STYLE == 'classifier':
+        print("=> creating classifier")
+        model = get_classifier(n_features=n_features, n_classes=n_classes)
+    else:
+        print("=> creating regressor")
+        model = get_regressor(n_features=n_features, n_classes=n_classes)
 
+    # Create optimizer
     if cfg.TRAIN.OPT == "sgd":
         optimizer = torch.optim.SGD(model.parameters(), lr=cfg.TRAIN.LR,
                                     momentum=cfg.TRAIN.MOMENTUM,
@@ -74,11 +79,19 @@ def main():
     if device == "cuda":
         cudnn.benchmark = True
 
-    # criterion and loaders
-    # criterion = LabelSmoothingLoss(std_smoothing=0.05, n_classes=n_classes).to(device)
-    criterion = nn.CrossEntropyLoss().to(device)
+    # criterion
+    if cfg.MODEL.ARCH_STYLE == 'classifier':
+        if cfg.MODEL.SMOOTHING==True:
+            print("=> using label smoothing" )
+            criterion = LabelSmoothingLoss(std_smoothing=0.03, n_classes=n_classes).to(device)
+        else:
+            criterion = nn.CrossEntropyLoss().to(device)
+    else:
+        criterion = nn.L1Loss(reduction="sum")
     
-    train_loader = get_feature_loader(train_features, train_labels, batch_size=1, shuffle=True,
+    
+    # loaders
+    train_loader = get_feature_loader(train_features, train_labels, batch_size=cfg.TEST.BATCH_SIZE, shuffle=True,
                               num_workers=cfg.TRAIN.WORKERS, drop_last=True)
 
     val_loader = get_feature_loader(valid_features, valid_labels, batch_size=cfg.TEST.BATCH_SIZE, shuffle=False,

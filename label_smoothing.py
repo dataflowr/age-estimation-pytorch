@@ -6,11 +6,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm
 
 class LabelSmoothingLoss(nn.Module):
-    """
-    With label smoothing,
-    KL-divergence between q_{smoothed ground truth prob.}(w)
-    and p_{prob. computed by model}(w) is minimized.
-    """
+    
     def __init__(self, std_smoothing, n_classes):
         assert 0.0 < std_smoothing <= 1.0
         super(LabelSmoothingLoss, self).__init__()
@@ -25,10 +21,12 @@ class LabelSmoothingLoss(nn.Module):
         model_prob = norm.pdf(self.x, target.unsqueeze(1), self.std)
         model_prob = model_prob/model_prob.sum(axis=1).reshape((model_prob.shape[0],1))
         model_prob = torch.from_numpy(model_prob)
+
+        output = output/output.sum(axis=1).reshape((output.shape[0],1))
         
         if debug: print(model_prob.sum(axis=1))
         
-        return F.kl_div(output.float(), model_prob.float(), reduction='sum')
+        return F.kl_div(output.float(), model_prob.float(), reduction='sum', log_target=True)
 
 # Problem : the smoothed labels do not sum to one --> does it involve a bias ? which one ?
 

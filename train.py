@@ -67,11 +67,14 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
             outputs = model(x)
 
             # calc loss
-            loss = criterion(outputs, y)
+            loss = criterion(outputs, y if cfg.MODEL.ARCH_STYLE=="classifier" else y.unsqueeze(1))
             cur_loss = loss.item()
 
             # calc accuracy
-            _, predicted = outputs.max(1)
+            if cfg.MODEL.ARCH_STYLE=='classifier':
+                _, predicted = outputs.max(1)
+            else:
+                predicted = outputs.squeeze().long()
             correct_num = predicted.eq(y).sum().item()
 
             # measure accuracy and record loss
@@ -105,17 +108,23 @@ def validate(validate_loader, model, criterion, epoch, device):
 
                 # compute output
                 outputs = model(x)
-                preds.append(F.softmax(outputs, dim=-1).cpu().numpy())
                 gt.append(y.cpu().numpy())
+                if cfg.MODEL.ARCH_STYLE=='classifier':
+                    preds.append(F.softmax(outputs, dim=-1).cpu().numpy())
+                else:
+                    preds.append(outputs.squeeze().cpu().numpy())
 
                 # valid for validation, not used for test
                 if criterion is not None:
                     # calc loss
-                    loss = criterion(outputs, y)
+                    loss = criterion(outputs, y if cfg.MODEL.ARCH_STYLE=='classifier' else y.unsqueeze(1))
                     cur_loss = loss.item()
 
                     # calc accuracy
-                    _, predicted = outputs.max(1)
+                    if cfg.MODEL.ARCH_STYLE=='classifier':
+                        _, predicted = outputs.max(1)
+                    else:
+                        predicted = outputs.squeeze().long()
                     correct_num = predicted.eq(y).sum().item()
 
                     # measure accuracy and record loss
@@ -125,12 +134,16 @@ def validate(validate_loader, model, criterion, epoch, device):
                     _tqdm.set_postfix(OrderedDict(stage="val", epoch=epoch, loss=loss_monitor.avg),
                                       acc=accuracy_monitor.avg, correct=correct_num, sample_num=sample_num)
 
-    preds = np.concatenate(preds, axis=0)
     gt = np.concatenate(gt, axis=0)
-    ages = np.arange(0, 101)
-    ave_preds = (preds * ages).sum(axis=-1)
-    diff = ave_preds - gt
-    mae = np.abs(diff).mean()
+    preds = np.concatenate(preds, axis=0)
+    if cfg.MODEL.ARCH_STYLE=='classifier':
+        ages = np.arange(0, 101)
+        ave_preds = (preds * ages).sum(axis=-1)
+        diff = ave_preds - gt
+        mae = np.abs(diff).mean()
+    else:
+        mae = F.l1_loss(torch.from_numpy(preds), torch.from_numpy(gt))
+
 
     return loss_monitor.avg, accuracy_monitor.avg, mae
 

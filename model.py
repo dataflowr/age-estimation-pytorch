@@ -18,18 +18,20 @@ def get_classifier(n_features, n_classes=101):
     classif = nn.Sequential(
         nn.Linear(n_features, hidden),
         nn.ReLU(),
-        nn.Linear(hidden, n_classes)
+        nn.Linear(hidden, n_classes),
+        # nn.Softmax()
         # TODO: try a Softmax or normalization
     )
     return classif
 
 def get_regressor(n_features, n_classes):
+    hidden = int(n_features/10)
     reg = nn.Sequential(
-        nn.Linear(n_features, n_features/10),
+        nn.Linear(n_features, hidden),
         nn.ReLU(),
-        nn.Linear(n_features/10, n_classes),
+        nn.Linear(hidden , n_classes),
         nn.ReLU(),
-        nn.Linear(n_classes,1)
+        nn.Linear(n_classes, 1)
     )
     return reg
 
