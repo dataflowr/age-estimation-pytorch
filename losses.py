@@ -22,6 +22,7 @@ class LabelSmoothingLoss(nn.Module):
         model_prob = model_prob/model_prob.sum(axis=1).reshape((model_prob.shape[0],1))
         model_prob = torch.from_numpy(model_prob)
 
+        output = F.softmax(output, dim=-1)
         output = output/output.sum(axis=1).reshape((output.shape[0],1))
         
         if debug: print(model_prob.sum(axis=1))
@@ -29,6 +30,27 @@ class LabelSmoothingLoss(nn.Module):
         return F.kl_div(output.float(), model_prob.float(), reduction='sum', log_target=True)
 
 # Problem : the smoothed labels do not sum to one --> does it involve a bias ? which one ?
+
+
+def aleatoric_loss(target, output):
+    se = torch.pow((target[:,0]-output[:,0]),2)
+    inv_std = torch.exp(-output[:,1])
+    mse = torch.mean(inv_std*se)
+    reg = torch.mean(output[:,1])
+    return 0.5*(mse + reg)
+
+class HeteroscedasticGaussianLoss(nn.Module):
+    
+    def __init__(self):
+        super(HeteroscedasticGaussianLoss, self).__init__()
+
+    def forward(self, output, target):
+        """
+        output (FloatTensor): batch_size x 2
+        target (LongTensor): batch_size
+        """
+        return aleatoric_loss(target, output)
+
 
 
 def main():

@@ -6,8 +6,10 @@ _C = CN()
 _C.MODEL = CN()
 _C.MODEL.ARCH = "se_resnext50_32x4d"  # check python train.py -h for available models
 _C.MODEL.IMG_SIZE = 224
-_C.MODEL.ARCH_STYLE = "classifier"    # or "regressor"
-_C.MODEL.SMOOTHING = False
+_C.MODEL.ARCH_STYLE = "regressor"    # or "regressor"
+_C.MODEL.SMOOTHING = True
+_C.MODEL.ALEATORIC = False
+_C.MODEL.STD_SMOOTHING = 0.02
 
 # Train
 _C.TRAIN = CN()

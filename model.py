@@ -1,6 +1,7 @@
 import torch.nn as nn
 import pretrainedmodels
 import pretrainedmodels.utils
+from defaults import _C as cfg
 
 
 def get_model(model_name="se_resnext50_32x4d", num_classes=101, pretrained="imagenet"):
@@ -18,8 +19,7 @@ def get_classifier(n_features, n_classes=101):
     classif = nn.Sequential(
         nn.Linear(n_features, hidden),
         nn.ReLU(),
-        nn.Linear(hidden, n_classes),
-        # nn.Softmax()
+        nn.Linear(hidden, n_classes)
         # TODO: try a Softmax or normalization
     )
     return classif
@@ -31,9 +31,11 @@ def get_regressor(n_features, n_classes):
         nn.ReLU(),
         nn.Linear(hidden , n_classes),
         nn.ReLU(),
-        nn.Linear(n_classes, 1)
+        nn.Linear(n_classes, 2 if cfg.MODEL.ALEATORIC else 1)
     )
     return reg
+
+
 
 def main():
     model = get_model()

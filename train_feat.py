@@ -21,7 +21,7 @@ from dataset import FaceDataset
 from defaults import _C as cfg
 from train import get_args, train, validate
 from feature_comp import get_feature_loader, preconvfeat
-from label_smoothing import LabelSmoothingLoss
+from losses import LabelSmoothingLoss, HeteroscedasticGaussianLoss
 import pickle
 
 
@@ -83,11 +83,14 @@ def main():
     if cfg.MODEL.ARCH_STYLE == 'classifier':
         if cfg.MODEL.SMOOTHING==True:
             print("=> using label smoothing" )
-            criterion = LabelSmoothingLoss(std_smoothing=0.03, n_classes=n_classes).to(device)
+            criterion = LabelSmoothingLoss(std_smoothing=cfg.MODEL.STD_SMOOTHING, n_classes=n_classes).to(device)
         else:
             criterion = nn.CrossEntropyLoss().to(device)
     else:
-        criterion = nn.L1Loss(reduction="sum")
+        if cfg.MODEL.ALEATORIC:
+            criterion = HeteroscedasticGaussianLoss().to(device)
+        else:
+            criterion = nn.L1Loss(reduction="sum").to(device)
     
     
     # loaders

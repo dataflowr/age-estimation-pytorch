@@ -74,7 +74,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
             if cfg.MODEL.ARCH_STYLE=='classifier':
                 _, predicted = outputs.max(1)
             else:
-                predicted = outputs.squeeze().long()
+                predicted = outputs[:,0].squeeze().long()
             correct_num = predicted.eq(y).sum().item()
 
             # measure accuracy and record loss
@@ -112,7 +112,7 @@ def validate(validate_loader, model, criterion, epoch, device):
                 if cfg.MODEL.ARCH_STYLE=='classifier':
                     preds.append(F.softmax(outputs, dim=-1).cpu().numpy())
                 else:
-                    preds.append(outputs.squeeze().cpu().numpy())
+                    preds.append(outputs[:,0].squeeze().cpu().numpy())
 
                 # valid for validation, not used for test
                 if criterion is not None:
@@ -124,7 +124,7 @@ def validate(validate_loader, model, criterion, epoch, device):
                     if cfg.MODEL.ARCH_STYLE=='classifier':
                         _, predicted = outputs.max(1)
                     else:
-                        predicted = outputs.squeeze().long()
+                        predicted = outputs[:,0].squeeze().long()
                     correct_num = predicted.eq(y).sum().item()
 
                     # measure accuracy and record loss
