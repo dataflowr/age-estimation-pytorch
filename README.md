@@ -79,6 +79,20 @@ python train.py --data_dir [PATH/TO/appa-real-release] --tensorboard tf_log MODE
 All default parameters defined in [defaults.py](defaults.py) can be changed using this style.
 
 
+#### Precompute Features
+
+```bash
+python feature_comp.py --data_dir [PATH/TO/appa-real-release]
+```
+
+
+#### Train classifiers/regressors upon precomputed features
+
+```bash
+python train_feat.py --data_dir [PATH/TO/appa-real-release] --tensorboard tf_log
+```
+
+
 #### Test Trained Model
 Evaluate the trained model using the APPA-REAL test dataset.
 
