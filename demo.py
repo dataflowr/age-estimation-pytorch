@@ -149,13 +149,18 @@ def main():
 
                 # predict ages
                 inputs = torch.from_numpy(np.transpose(faces.astype(np.float32), (0, 3, 1, 2))).to(device)
-                outputs = F.softmax(model(inputs), dim=-1).cpu().numpy()
+                #Uncomment for classification
+                #outputs = F.softmax(model(inputs), dim=-1).cpu().numpy() 
+                print(inputs.size())
+                means = model(inputs).cpu().numpy()[:,0]
+                stds = model(inputs).cpu().numpy()[:,1]
+                print(means, stds)
                 ages = np.arange(0, 101)
-                predicted_ages = (outputs * ages).sum(axis=-1)
+                #predicted_ages = (outputs * ages).sum(axis=-1)
 
                 # draw results
                 for i, d in enumerate(detected):
-                    label = "{}".format(int(predicted_ages[i]))
+                    label = "mean :  {}, std : {} ".format(int(means[i]), int(stds[i]) )
                     draw_label(img, (d.left(), d.top()), label)
 
             if args.output_dir is not None:
