@@ -64,14 +64,37 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
             y = y.to(device)
 
             # compute output
-            outputs = model(x)
+            prob, pred = model(x)
+
+            # change
+            outputs = torch.sum(prob*pred, dim=1).float()
+            y = y.float()
 
             # calc loss
-            loss = criterion(outputs, y)
+            c = torch.arange(1,76).to(device)
+            lm = 0.5*torch.mean(torch.pow(torch.sum(prob*c)-y, 2))
+            lv = torch.mean(torch.sum(prob*torch.pow(c-torch.sum(prob*c),2)))
+
+            L2 = torch.zeros_like(pred)
+            y_copy= y.unsqueeze(1).repeat(1,75)
+
+            for i in range(pred.shape[0]):
+                pred_i = pred[i,:].unsqueeze(1)
+                y_i = y_copy[i,:].unsqueeze(1)
+                L2[i,:] = torch.sum(torch.pow(pred_i-y_i, 2))
+
+            l2 = torch.mean(L2)
+
+            loss = lm+lv+l2
             cur_loss = loss.item()
 
             # calc accuracy
-            _, predicted = outputs.max(1)
+            # change
+            #_, predicted = outputs.max(1)
+
+            predicted = outputs.int()
+
+
             correct_num = predicted.eq(y).sum().item()
 
             # measure accuracy and record loss
@@ -104,18 +127,39 @@ def validate(validate_loader, model, criterion, epoch, device):
                 y = y.to(device)
 
                 # compute output
-                outputs = model(x)
-                preds.append(F.softmax(outputs, dim=-1).cpu().numpy())
+                prob, pred = model(x)
+
+                # change
+                outputs = torch.sum(prob*pred, dim=1).float()
+
+                # change
+                #preds.append(F.softmax(outputs, dim=-1).cpu().numpy())
+                preds.append(outputs.cpu().numpy())
                 gt.append(y.cpu().numpy())
 
                 # valid for validation, not used for test
                 if criterion is not None:
                     # calc loss
-                    loss = criterion(outputs, y)
+                    c = torch.arange(1,76).to(device)
+                    lm = 0.5*torch.mean(torch.pow(torch.sum(prob*c)-y, 2))
+                    lv = torch.mean(torch.sum(prob*torch.pow(c-torch.sum(prob*c),2)))
+                    L2 = torch.zeros_like(pred)
+                    y_copy= y.unsqueeze(1).repeat(1,75)
+
+                    for i in range(pred.shape[0]):
+                        pred_i = pred[i,:].unsqueeze(1)
+                        y_i = y_copy[i,:].unsqueeze(1)
+                        L2[i,:] = torch.sum(torch.pow(pred_i-y_i, 2))
+
+                    l2 = torch.mean(L2)
+
+                    loss = lm+lv+l2
                     cur_loss = loss.item()
 
                     # calc accuracy
-                    _, predicted = outputs.max(1)
+                    # change
+                    #_, predicted = outputs.max(1)
+                    predicted = outputs.int()
                     correct_num = predicted.eq(y).sum().item()
 
                     # measure accuracy and record loss
@@ -127,9 +171,7 @@ def validate(validate_loader, model, criterion, epoch, device):
 
     preds = np.concatenate(preds, axis=0)
     gt = np.concatenate(gt, axis=0)
-    ages = np.arange(0, 101)
-    ave_preds = (preds * ages).sum(axis=-1)
-    diff = ave_preds - gt
+    diff = preds - gt
     mae = np.abs(diff).mean()
 
     return loss_monitor.avg, accuracy_monitor.avg, mae
@@ -181,7 +223,12 @@ def main():
     if device == "cuda":
         cudnn.benchmark = True
 
-    criterion = nn.CrossEntropyLoss().to(device)
+    # leur solution
+    #criterion = nn.CrossEntropyLoss().to(device)
+
+    # tentative
+    criterion = nn.MSELoss().to(device)
+
     train_dataset = FaceDataset(args.data_dir, "train", img_size=cfg.MODEL.IMG_SIZE, augment=True,
                                 age_stddev=cfg.TRAIN.AGE_STDDEV)
     train_loader = DataLoader(train_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
@@ -242,3 +289,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

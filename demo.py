@@ -112,7 +112,7 @@ def main():
     if Path(resume_path).is_file():
         print("=> loading checkpoint '{}'".format(resume_path))
         checkpoint = torch.load(resume_path, map_location="cpu")
-        model.load_state_dict(checkpoint['state_dict'])
+        model.load_state_dict(checkpoint['state_dict'], strict=False)
         print("=> loaded checkpoint '{}'".format(resume_path))
     else:
         raise ValueError("=> no checkpoint found at '{}'".format(resume_path))
@@ -171,3 +171,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
