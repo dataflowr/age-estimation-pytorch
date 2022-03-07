@@ -15,7 +15,7 @@ class ImgAugTransform:
             iaa.OneOf([
                 iaa.Sometimes(0.25, iaa.AdditiveGaussianNoise(scale=0.1 * 255)),
                 iaa.Sometimes(0.25, iaa.GaussianBlur(sigma=(0, 3.0)))
-                ]),
+            ]),
             iaa.Affine(
                 rotate=(-20, 20), mode="edge",
                 scale={"x": (0.95, 1.05), "y": (0.95, 1.05)},
@@ -63,6 +63,7 @@ class FaceDataset(Dataset):
             assert(img_path.is_file())
             self.x.append(str(img_path))
             self.y.append(row["apparent_age_avg"])
+            #self.y.append(row["real_age"])
             self.std.append(row["apparent_age_std"])
 
     def __len__(self):
@@ -77,8 +78,20 @@ class FaceDataset(Dataset):
 
         img = cv2.imread(str(img_path), 1)
         img = cv2.resize(img, (self.img_size, self.img_size))
+
+        # crée une séquence d'images augmenteés
+        '''x = torch.from_numpy(np.transpose(img, (2, 0, 1)))
+        shape = x.shape
+        seq= torch.zeros((8, 3, 224,224))
+        index = 0
+        input_img = x.reshape([224,224,3])
+        for i in range(8):
+            img_aug = torch.from_numpy(np.transpose(self.transform(input_img).astype(np.float32), (2, 1, 0)))
+            seq[i] = img_aug'''
         img = self.transform(img).astype(np.float32)
         return torch.from_numpy(np.transpose(img, (2, 0, 1))), np.clip(round(age), 0, 100)
+
+
 
 
 def main():
@@ -95,3 +108,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
