@@ -112,7 +112,7 @@ def main():
     if Path(resume_path).is_file():
         print("=> loading checkpoint '{}'".format(resume_path))
         checkpoint = torch.load(resume_path, map_location="cpu")
-        model.load_state_dict(checkpoint['state_dict'], strict=False)
+        model.load_state_dict(checkpoint['state_dict'])
         print("=> loaded checkpoint '{}'".format(resume_path))
     else:
         raise ValueError("=> no checkpoint found at '{}'".format(resume_path))
@@ -149,9 +149,8 @@ def main():
 
                 # predict ages
                 inputs = torch.from_numpy(np.transpose(faces.astype(np.float32), (0, 3, 1, 2))).to(device)
-                outputs = F.softmax(model(inputs), dim=-1).cpu().numpy()
-                ages = np.arange(0, 101)
-                predicted_ages = (outputs * ages).sum(axis=-1)
+                probs, ages= model(inputs)
+                predicted_ages = torch.sum(probs*ages, dim=1)
 
                 # draw results
                 for i, d in enumerate(detected):
@@ -171,4 +170,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
