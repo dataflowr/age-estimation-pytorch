@@ -38,7 +38,19 @@ def get_args():
     args = parser.parse_args()
     return args
 
-
+def aleatoric_loss(output, target, uncertainty):
+    
+    #print(output[:,0].size)
+    first_part = torch.pow(output[:,0] - target.float(),2)/2/(torch.pow(output[:,1],2)+ 1e-9)
+    second_part = torch.log(torch.pow(output[:,1],2) + 1e-9)/2
+    return (first_part + second_part).mean()
+  
+def homosedastic_case(output, target, uncertainty):
+    
+    first_part = torch.pow(output - target.float(),2)/2/(torch.pow(uncertainty,2)+ 1e-9)
+    second_part = torch.log(uncertainty,2) + 1e-9)/2
+    return (first_part + second_part).mean()
+  
 class AverageMeter(object):
     def __init__(self):
         self.val = 0
@@ -53,27 +65,35 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-def train(train_loader, model, criterion, optimizer, epoch, device):
+def train(train_loader, model, criterion, optimizer, epoch, device, homosedastic = False):
     model.train()
     loss_monitor = AverageMeter()
     accuracy_monitor = AverageMeter()
 
     with tqdm(train_loader) as _tqdm:
-        for x, y in _tqdm:
+        for i,(x, y) in enumerate(_tqdm):
             x = x.to(device)
             y = y.to(device)
+            #print(x.shape, y.shape)
+            
 
             # compute output
+            
             outputs = model(x)
+            #print("forward_passed")
 
-            # calc loss
-            loss = criterion(outputs, y)
-            cur_loss = loss.item()
-
-            # calc accuracy
-            _, predicted = outputs.max(1)
-            correct_num = predicted.eq(y).sum().item()
-
+            if homosedastic:
+                loss = criterion(outputs, y, model.hom_error)
+                curr_loss = loss.item()
+                predicted = outputs
+            else:    
+                loss = criterion(outputs, y)
+                curr_loss = loss.ite()
+                predicted = outputs[:,0]
+                
+            correct_num = (torch.abs(y.float()-predicted)<2).sum().item()
+            if i==0 :
+              print(predicted , y, predicted-y.float() , errors) 
             # measure accuracy and record loss
             sample_num = x.size(0)
             loss_monitor.update(cur_loss, sample_num)
@@ -90,7 +110,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
     return loss_monitor.avg, accuracy_monitor.avg
 
 
-def validate(validate_loader, model, criterion, epoch, device):
+def validate(validate_loader, model, criterion, epoch, device, homosedastic = False):
     model.eval()
     loss_monitor = AverageMeter()
     accuracy_monitor = AverageMeter()
@@ -105,19 +125,21 @@ def validate(validate_loader, model, criterion, epoch, device):
 
                 # compute output
                 outputs = model(x)
-                preds.append(F.softmax(outputs, dim=-1).cpu().numpy())
-                gt.append(y.cpu().numpy())
+                #preds.append(F.softmax(outputs, dim=-1).cpu().numpy())
+                #gt.append(y.cpu().numpy())
 
                 # valid for validation, not used for test
                 if criterion is not None:
                     # calc loss
-                    loss = criterion(outputs, y)
-                    cur_loss = loss.item()
-
-                    # calc accuracy
-                    _, predicted = outputs.max(1)
-                    correct_num = predicted.eq(y).sum().item()
-
+                    if homosedastic:
+                        loss = criterion(outputs, y, model.hom_error)
+                        curr_loss = loss.item()
+                        predicted = outputs
+                    else:    
+                        loss = criterion(outputs, y)
+                        curr_loss = loss.ite()
+                        predicted = outputs[:,0]
+                    correct_num = (torch.abs(y.float()-predicted)<2).sum().item()
                     # measure accuracy and record loss
                     sample_num = x.size(0)
                     loss_monitor.update(cur_loss, sample_num)
@@ -125,12 +147,12 @@ def validate(validate_loader, model, criterion, epoch, device):
                     _tqdm.set_postfix(OrderedDict(stage="val", epoch=epoch, loss=loss_monitor.avg),
                                       acc=accuracy_monitor.avg, correct=correct_num, sample_num=sample_num)
 
-    preds = np.concatenate(preds, axis=0)
-    gt = np.concatenate(gt, axis=0)
-    ages = np.arange(0, 101)
-    ave_preds = (preds * ages).sum(axis=-1)
-    diff = ave_preds - gt
-    mae = np.abs(diff).mean()
+    #preds = np.concatenate(preds, axis=0)
+    #gt = np.concatenate(gt, axis=0)
+    #ages = np.arange(0, 101)
+    #ave_preds = (preds * ages).sum(axis=-1)
+    
+    mae = (torch.abs(y.float()-predicted)).mean()
 
     return loss_monitor.avg, accuracy_monitor.avg, mae
 
@@ -148,7 +170,7 @@ def main():
 
     # create model
     print("=> creating model '{}'".format(cfg.MODEL.ARCH))
-    model = get_model(model_name=cfg.MODEL.ARCH)
+    model = get_model(model_name=cfg.MODEL.ARCH, homosedastic = cfg.MODEL.HOMOSCEDASTIC)
 
     if cfg.TRAIN.OPT == "sgd":
         optimizer = torch.optim.SGD(model.parameters(), lr=cfg.TRAIN.LR,
@@ -158,6 +180,7 @@ def main():
         optimizer = torch.optim.Adam(model.parameters(), lr=cfg.TRAIN.LR)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(device)
     model = model.to(device)
 
     # optionally resume from a checkpoint
@@ -176,12 +199,13 @@ def main():
             print("=> no checkpoint found at '{}'".format(resume_path))
 
     if args.multi_gpu:
+        print(args.multi_gpu)
         model = nn.DataParallel(model)
 
     if device == "cuda":
         cudnn.benchmark = True
 
-    criterion = nn.CrossEntropyLoss().to(device)
+    criterion = homosedastic_case if cfg.MODEL.HOMOSCEDASTIC else aleatoric_loss
     train_dataset = FaceDataset(args.data_dir, "train", img_size=cfg.MODEL.IMG_SIZE, augment=True,
                                 age_stddev=cfg.TRAIN.AGE_STDDEV)
     train_loader = DataLoader(train_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
@@ -190,12 +214,10 @@ def main():
     val_dataset = FaceDataset(args.data_dir, "valid", img_size=cfg.MODEL.IMG_SIZE, augment=False)
     val_loader = DataLoader(val_dataset, batch_size=cfg.TEST.BATCH_SIZE, shuffle=False,
                             num_workers=cfg.TRAIN.WORKERS, drop_last=False)
-
     scheduler = StepLR(optimizer, step_size=cfg.TRAIN.LR_DECAY_STEP, gamma=cfg.TRAIN.LR_DECAY_RATE,
                        last_epoch=start_epoch - 1)
     best_val_mae = 10000.0
     train_writer = None
-
     if args.tensorboard is not None:
         opts_prefix = "_".join(args.opts)
         train_writer = SummaryWriter(log_dir=args.tensorboard + "/" + opts_prefix + "_train")
@@ -203,10 +225,11 @@ def main():
 
     for epoch in range(start_epoch, cfg.TRAIN.EPOCHS):
         # train
-        train_loss, train_acc = train(train_loader, model, criterion, optimizer, epoch, device)
-
+        
+        train_loss, train_acc = train(train_loader, model, criterion, optimizer, epoch, device, homosedastic = cfg.MODEL.HOMOSCEDASTIC)
+        
         # validate
-        val_loss, val_acc, val_mae = validate(val_loader, model, criterion, epoch, device)
+        val_loss, val_acc, val_mae = validate(val_loader, model, criterion, epoch, device, , homosedastic = cfg.MODEL.HOMOSCEDASTIC)
 
         if args.tensorboard is not None:
             train_writer.add_scalar("loss", train_loss, epoch)
@@ -226,7 +249,7 @@ def main():
                     'state_dict': model_state_dict,
                     'optimizer_state_dict': optimizer.state_dict()
                 },
-                str(checkpoint_dir.joinpath("epoch{:03d}_{:.5f}_{:.4f}.pth".format(epoch, val_loss, val_mae)))
+                str(checkpoint_dir.joinpath("{} epoch{:03d}_{:.5f}_{:.4f}.pth".format(cfg.MODEL.ARCH ,epoch, val_loss, val_mae)))
             )
             best_val_mae = val_mae
         else:
