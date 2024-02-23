@@ -1,5 +1,4 @@
 import argparse
-import better_exceptions
 from pathlib import Path
 from collections import OrderedDict
 from tqdm import tqdm
@@ -12,7 +11,6 @@ import torch.optim
 from torch.optim.lr_scheduler import StepLR
 import torch.utils.data
 from torch.utils.data import DataLoader
-import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 import pretrainedmodels
 import pretrainedmodels.utils
@@ -64,14 +62,35 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
             y = y.to(device)
 
             # compute output
-            outputs = model(x)
+            prob, pred = model(x)
+            age_range = pred.shape[-1]
 
-            # calc loss
-            loss = criterion(outputs, y)
+            outputs = torch.sum(prob*pred, dim=1).float()
+            y = y.float()
+
+            # calcul loss
+            c = torch.arange(1,age_range+1).to(device)
+            lm = 0.5*torch.mean(torch.pow(torch.sum(prob*c)-y, 2))
+            lv = torch.mean(torch.sum(prob*torch.pow(c-torch.sum(prob*c),2)))
+
+            L2 = torch.zeros_like(pred)
+            y_copy= y.unsqueeze(1).repeat(1,age_range)
+
+            for i in range(pred.shape[0]):
+                pred_i = pred[i,:].unsqueeze(1)
+                y_i = y_copy[i,:].unsqueeze(1)
+                L2[i,:] = torch.sum(torch.pow(pred_i-y_i, 2))
+
+            combine_loss = criterion(outputs, y)
+
+            l2 = torch.mean(L2)
+
+            loss = lm + lv +l2+ combine_loss
             cur_loss = loss.item()
 
-            # calc accuracy
-            _, predicted = outputs.max(1)
+            predicted = outputs.int()
+
+
             correct_num = predicted.eq(y).sum().item()
 
             # measure accuracy and record loss
@@ -85,7 +104,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
             optimizer.step()
 
             _tqdm.set_postfix(OrderedDict(stage="train", epoch=epoch, loss=loss_monitor.avg),
-                              acc=accuracy_monitor.avg, correct=correct_num, sample_num=sample_num)
+                              combine_loss = combine_loss.item(), correct=correct_num, sample_num=sample_num)
 
     return loss_monitor.avg, accuracy_monitor.avg
 
@@ -102,20 +121,37 @@ def validate(validate_loader, model, criterion, epoch, device):
             for i, (x, y) in enumerate(_tqdm):
                 x = x.to(device)
                 y = y.to(device)
-
                 # compute output
-                outputs = model(x)
-                preds.append(F.softmax(outputs, dim=-1).cpu().numpy())
+                prob, pred = model(x)
+                age_range = pred.shape[-1]
+
+                outputs = torch.sum(prob*pred, dim=1).float()
+
+                preds.append(outputs.cpu().numpy())
                 gt.append(y.cpu().numpy())
 
                 # valid for validation, not used for test
                 if criterion is not None:
                     # calc loss
-                    loss = criterion(outputs, y)
+                    c = torch.arange(1,age_range+1).to(device)
+                    lm = 0.5*torch.mean(torch.pow(torch.sum(prob*c)-y, 2))
+                    lv = torch.mean(torch.sum(prob*torch.pow(c-torch.sum(prob*c),2)))
+                    L2 = torch.zeros_like(pred)
+                    y_copy= y.unsqueeze(1).repeat(1,age_range)
+
+                    for i in range(pred.shape[0]):
+                        pred_i = pred[i,:].unsqueeze(1)
+                        y_i = y_copy[i,:].unsqueeze(1)
+                        L2[i,:] = torch.sum(torch.pow(pred_i-y_i, 2))
+
+                    l2 = torch.mean(L2)
+                    combine_loss = criterion(outputs, y)
+
+                    loss = lm+lv+l2+combine_loss
                     cur_loss = loss.item()
 
                     # calc accuracy
-                    _, predicted = outputs.max(1)
+                    predicted = outputs.int()
                     correct_num = predicted.eq(y).sum().item()
 
                     # measure accuracy and record loss
@@ -123,13 +159,11 @@ def validate(validate_loader, model, criterion, epoch, device):
                     loss_monitor.update(cur_loss, sample_num)
                     accuracy_monitor.update(correct_num, sample_num)
                     _tqdm.set_postfix(OrderedDict(stage="val", epoch=epoch, loss=loss_monitor.avg),
-                                      acc=accuracy_monitor.avg, correct=correct_num, sample_num=sample_num)
+                                      combine_loss = combine_loss.item(), correct=correct_num, sample_num=sample_num)
 
     preds = np.concatenate(preds, axis=0)
     gt = np.concatenate(gt, axis=0)
-    ages = np.arange(0, 101)
-    ave_preds = (preds * ages).sum(axis=-1)
-    diff = ave_preds - gt
+    diff = preds - gt
     mae = np.abs(diff).mean()
 
     return loss_monitor.avg, accuracy_monitor.avg, mae
@@ -181,9 +215,19 @@ def main():
     if device == "cuda":
         cudnn.benchmark = True
 
-    criterion = nn.CrossEntropyLoss().to(device)
-    train_dataset = FaceDataset(args.data_dir, "train", img_size=cfg.MODEL.IMG_SIZE, augment=True,
-                                age_stddev=cfg.TRAIN.AGE_STDDEV)
+    criterion = nn.MSELoss().to(device)
+
+    train_dataset = FaceDataset(args.data_dir, "train", img_size=cfg.MODEL.IMG_SIZE, augment=True,age_stddev=cfg.TRAIN.AGE_STDDEV)
+
+
+    # to use UTK dataset
+    #dataset = FaceDataset('UTKFace', img_size=cfg.MODEL.IMG_SIZE, augment=True)
+
+    #train_size = int(0.8 * len(dataset))
+    #test_size = len(dataset) - train_size
+
+    #train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+
     train_loader = DataLoader(train_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
                               num_workers=cfg.TRAIN.WORKERS, drop_last=True)
 
@@ -242,3 +286,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

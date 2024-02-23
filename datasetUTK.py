@@ -33,13 +33,11 @@ class ImgAugTransform:
 
 
 class FaceDataset(Dataset):
-    def __init__(self, data_dir, data_type, img_size=224, augment=False, age_stddev=1.0):
-        assert(data_type in ("train", "valid", "test"))
-        csv_path = Path(data_dir).joinpath(f"gt_avg_{data_type}.csv")
-        img_dir = Path(data_dir).joinpath(data_type)
+    def __init__(self, data_dir, img_size=224, augment=False):
+        csv_path = data_dir+'.csv'
+        img_dir = Path(data_dir)
         self.img_size = img_size
         self.augment = augment
-        self.age_stddev = age_stddev
 
         if augment:
             self.transform = ImgAugTransform()
@@ -48,23 +46,17 @@ class FaceDataset(Dataset):
 
         self.x = []
         self.y = []
-        self.std = []
         df = pd.read_csv(str(csv_path))
-        ignore_path = Path(__file__).resolve().parent.joinpath("ignore_list.csv")
-        ignore_img_names = list(pd.read_csv(str(ignore_path))["img_name"].values)
 
         for _, row in df.iterrows():
-            img_name = row["file_name"]
-
-            if img_name in ignore_img_names:
-                continue
-
-            img_path = img_dir.joinpath(img_name + "_face.jpg")
+            img_path = Path(data_dir).joinpath(row["img_dir"])
             assert(img_path.is_file())
             self.x.append(str(img_path))
-            self.y.append(row["apparent_age_avg"])
-            #self.y.append(row["real_age"])
-            self.std.append(row["apparent_age_std"])
+            self.y.append(row["age"])
+
+        # to have len devideble by batch size 32
+        self.x = self.x[:23680]
+        self.y = self.y[:23680]
 
     def __len__(self):
         return len(self.y)
@@ -73,25 +65,10 @@ class FaceDataset(Dataset):
         img_path = self.x[idx]
         age = self.y[idx]
 
-        if self.augment:
-            age += np.random.randn() * self.std[idx] * self.age_stddev
-
         img = cv2.imread(str(img_path), 1)
         img = cv2.resize(img, (self.img_size, self.img_size))
-
-        # crée une séquence d'images augmenteés
-        '''x = torch.from_numpy(np.transpose(img, (2, 0, 1)))
-        shape = x.shape
-        seq= torch.zeros((8, 3, 224,224))
-        index = 0
-        input_img = x.reshape([224,224,3])
-        for i in range(8):
-            img_aug = torch.from_numpy(np.transpose(self.transform(input_img).astype(np.float32), (2, 1, 0)))
-            seq[i] = img_aug'''
         img = self.transform(img).astype(np.float32)
-        return torch.from_numpy(np.transpose(img, (2, 0, 1))), np.clip(round(age), 0, 100)
-
-
+        return torch.from_numpy(np.transpose(img, (2, 0, 1))), np.clip(round(age), 0, 116)
 
 
 def main():
@@ -108,4 +85,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
